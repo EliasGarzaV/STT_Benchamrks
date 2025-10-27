@@ -9,11 +9,14 @@ from dotenv import load_dotenv
 import json
 from deepgram import DeepgramClient
 from elevenlabs.client import ElevenLabs
+from openai import OpenAI
 load_dotenv()
 
 DEEPGRAMG_API_KEY = os.getenv("DEEPGRAM_API_KEY")
 CARTESIA_API_KEY = os.getenv("CARTESIA_KEY")
 ELEVENLABS_API_KEY = os.getenv('ELEVENLABS_API_KEY')
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
 
 #%% Loading reviewed transcripts
 
@@ -33,8 +36,8 @@ def convert_opus_to_mp3(opus_file, mp3_file):
     
     return mp3_file_path
 
-for i in range(len(transcripts)):
-    convert_opus_to_mp3(f'audios\opus\OPUS_{i}.opus', f'audios\mp3\AudioBenchmark_{i}.mp3')
+# for i in range(len(transcripts)):
+#     convert_opus_to_mp3(f'audios\opus\OPUS_{i}.opus', f'audios\mp3\AudioBenchmark_{i}.mp3')
 
 
 #%%Deepgram API wrapper
@@ -106,6 +109,26 @@ elevenlabs = ElevenLabs(api_key=ELEVENLABS_API_KEY)
 
 # stt_elevenlabs('audios/mp3/AudioBenchmark_1.mp3')
 
+#%% OPENAI Transcribe wrapper
+
+def stt_openai(audio_path:str, client:OpenAI) -> str:
+    try:
+        with open(audio_path, "rb") as audio_file:
+
+            transcription = client.audio.transcriptions.create(
+                model="gpt-4o-transcribe", 
+                file=audio_file
+            )
+        
+        return transcription.text
+    
+    except Exception as e:
+        raise e
+
+openai_client = OpenAI(api_key=OPENAI_API_KEY)
+
+# stt_openai("audios\mp3\AudioBenchmark_0.mp3", openai_client)
+
 #%% WER definition
 
 def get_wer(predictions, real, wer_model=load("wer"), evaluate_punctuation:bool=True, evaluate_accent:bool=False, remove=".,?!¿¡;:*(){}[]'"):
@@ -139,6 +162,7 @@ results_deepgram_nova = []
 results_deepgram_enhanced = []
 results_cartesia = []
 results_elevenlabs = []
+results_openai = []
 
 for i,tr in enumerate(transcripts):
     print(i,tr)
@@ -148,12 +172,15 @@ for i,tr in enumerate(transcripts):
     results_deepgram_enhanced.append(stt_deepgram(f'audios/mp3/AudioBenchmark_{i}.mp3', deepgram_client, model_str='enhanced'))
     results_cartesia.append(stt_cartesia(f'audios/mp3/AudioBenchmark_{i}.mp3'))
     results_elevenlabs.append(stt_elevenlabs(f'audios/mp3/AudioBenchmark_{i}.mp3'))
+    results_openai.append(stt_openai(f'audios/mp3/AudioBenchmark_{i}.mp3', openai_client))
+    
     
 results = pd.DataFrame({'Transcript':transcript, 
                         'results_Deepgram_Nova-3':results_deepgram_nova,
                         'Deepgram_Enhanced':results_deepgram_enhanced,
                         'Cartesia':results_cartesia,
-                        'ElevenLabs':results_elevenlabs
+                        'ElevenLabs':results_elevenlabs,
+                        'OpenAI_Transcribe':results_openai
                         })
 results.to_csv('Results.csv')
 results.to_clipboard()
@@ -165,6 +192,7 @@ nova = get_wer(results_deepgram_nova, transcript, evaluate_punctuation=False, re
 enhanced = get_wer(results_deepgram_enhanced, transcript, evaluate_punctuation=False, remove=['¿¡'])
 cartesia = get_wer(results_cartesia, transcript, evaluate_punctuation=False, remove=['¿¡'])
 elevenlabs = get_wer(results_elevenlabs, transcript, evaluate_punctuation=False, remove=['¿¡'])
+openai = get_wer(results_openai, transcript, evaluate_punctuation=False, remove=['¿¡'])
 
 nova, enhanced, cartesia, elevenlabs
 #%%
@@ -173,6 +201,8 @@ nova = get_wer(results_deepgram_nova, transcript)
 enhanced = get_wer(results_deepgram_enhanced, transcript)
 cartesia = get_wer(results_cartesia, transcript)
 elevenlabs = get_wer(results_elevenlabs, transcript)
+openai = get_wer(results_openai, transcript)
+
 
 nova, enhanced, cartesia, elevenlabs
 #%%
@@ -181,6 +211,7 @@ nova = get_wer(results_deepgram_nova, transcript, evaluate_punctuation=False)
 enhanced = get_wer(results_deepgram_enhanced, transcript, evaluate_punctuation=False)
 cartesia = get_wer(results_cartesia, transcript, evaluate_punctuation=False)
 elevenlabs = get_wer(results_elevenlabs, transcript, evaluate_punctuation=False)
+openai = get_wer(results_openai, transcript, evaluate_punctuation=False)
 
 nova, enhanced, cartesia, elevenlabs
 

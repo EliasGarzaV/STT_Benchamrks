@@ -13,3 +13,5 @@ venv
 *.parquet
 
 *.html
+
+*.ipynb
