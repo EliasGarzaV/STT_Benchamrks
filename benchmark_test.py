@@ -165,14 +165,17 @@ results_elevenlabs = []
 results_openai = []
 
 for i,tr in enumerate(transcripts):
-    print(i,tr)
-    transcript.append(tr)
-    
-    results_deepgram_nova.append(stt_deepgram(f'audios/mp3/AudioBenchmark_{i}.mp3', deepgram_client))
-    results_deepgram_enhanced.append(stt_deepgram(f'audios/mp3/AudioBenchmark_{i}.mp3', deepgram_client, model_str='enhanced'))
-    results_cartesia.append(stt_cartesia(f'audios/mp3/AudioBenchmark_{i}.mp3'))
-    results_elevenlabs.append(stt_elevenlabs(f'audios/mp3/AudioBenchmark_{i}.mp3'))
-    results_openai.append(stt_openai(f'audios/mp3/AudioBenchmark_{i}.mp3', openai_client))
+    try:
+        print(i,tr)
+        transcript.append(tr)
+        
+        results_deepgram_nova.append(stt_deepgram(f'audios/mp3/AudioBenchmark_{i}.mp3', deepgram_client))
+        results_deepgram_enhanced.append(stt_deepgram(f'audios/mp3/AudioBenchmark_{i}.mp3', deepgram_client, model_str='enhanced'))
+        results_cartesia.append(stt_cartesia(f'audios/mp3/AudioBenchmark_{i}.mp3'))
+        results_elevenlabs.append(stt_elevenlabs(f'audios/mp3/AudioBenchmark_{i}.mp3'))
+        results_openai.append(stt_openai(f'audios/mp3/AudioBenchmark_{i}.mp3', openai_client))
+    except Exception as e:
+        print(e)
     
     
 results = pd.DataFrame({'Transcript':transcript, 

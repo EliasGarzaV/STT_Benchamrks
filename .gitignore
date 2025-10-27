@@ -15,3 +15,5 @@ venv
 *.html
 
 *.ipynb
+
+*.xlsx
