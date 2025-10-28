@@ -1,5 +1,5 @@
 #%%
-from evaluate import load
+# from evaluate import load
 from pydub import AudioSegment
 import os
 import json
@@ -10,6 +10,7 @@ import json
 from deepgram import DeepgramClient
 from elevenlabs.client import ElevenLabs
 from openai import OpenAI
+import time
 load_dotenv()
 
 DEEPGRAMG_API_KEY = os.getenv("DEEPGRAM_API_KEY")
@@ -42,17 +43,32 @@ def convert_opus_to_mp3(opus_file, mp3_file):
 
 #%%Deepgram API wrapper
 
-def stt_deepgram(audio_path:str, client:DeepgramClient, model_str:str='nova-3') -> str:
+def stt_deepgram(audio_path: str, client: DeepgramClient, model_str: str = "nova-3"):
     try:
+        start_time = time.perf_counter()
         with open(audio_path, "rb") as audio_file:
             response = client.listen.v1.media.transcribe_file(
                 request=audio_file.read(),
                 model=model_str,
-                language='es',
+                language="es",
                 smart_format=True,
             )
+        end_time = time.perf_counter()
 
-        return json.loads(response.json())['results']['channels'][0]['alternatives'][0]['transcript']
+        total_latency = end_time - start_time
+        response_json = json.loads(response.json())
+        transcript = response_json["results"]["channels"][0]["alternatives"][0]["transcript"]
+
+        processing_time = response_json.get("metadata", {}).get("processing_time")
+        network_latency = total_latency - processing_time if processing_time else None
+
+        latency_info = {
+            "total_latency": total_latency,
+            "processing_time": processing_time,
+            "network_latency": network_latency,
+        }
+
+        return transcript, latency_info
     except Exception as e:
         raise e
 
@@ -63,25 +79,37 @@ deepgram_client = DeepgramClient(api_key=DEEPGRAMG_API_KEY)
 
 #%% Cartesia API wrapper
 
-def stt_cartesia(audio_path: str) -> str:
+def stt_cartesia(audio_path: str):
     try:
         url = "https://api.cartesia.ai/stt"
         headers = {
             "Authorization": f"Bearer {CARTESIA_API_KEY}",
-            "Cartesia-Version": '2025-04-16'
+            "Cartesia-Version": "2025-04-16",
         }
         files = {"file": open(audio_path, "rb")}
         data = {
             "model": "ink-whisper",
             "language": "es",
-            "timestamp_granularities[]": "word"
+            "timestamp_granularities[]": "word",
         }
 
+        start_time = time.perf_counter()
         response = requests.post(url, headers=headers, files=files, data=data)
+        end_time = time.perf_counter()
+
         response.raise_for_status()
         result = response.json()
-        # results_Cartesia returns `text` in root or inside `transcript`
-        return result.get("text") or result.get("transcript", "")
+
+        total_latency = end_time - start_time
+
+        transcript = result.get("text") or result.get("transcript", "")
+        latency_info = {
+            "total_latency": total_latency,
+            "processing_time": None,
+            "network_latency": None,
+        }
+
+        return transcript, latency_info
     except Exception as e:
         raise e
 
@@ -89,39 +117,58 @@ def stt_cartesia(audio_path: str) -> str:
 
 #%%Elevenlabs API Wrapper
 
-def stt_elevenlabs(audio_path: str) -> str:
+def stt_elevenlabs(audio_path: str, client: ElevenLabs):
     try:
-        # STEP 2: Call the transcribe_file method with the audio file and options
+        start_time = time.perf_counter()
         with open(audio_path, "rb") as audio_file:
-            transcription = elevenlabs.speech_to_text.convert(
+            transcription = client.speech_to_text.convert(
                 file=audio_file,
-                model_id="scribe_v1", # Model to use, for now only "scribe_v1" is supported
-                tag_audio_events=True, # Tag audio events like laughter, applause, etc.
-                language_code="spa", # Language of the audio file. If set to None, the model will detect the language automatically.
-                diarize=False, # Whether to annotate who is speaking
+                model_id="scribe_v1",
+                tag_audio_events=True,
+                language_code="spa",
+                diarize=False,
             )
-            
-            return transcription.dict()['text']
+        end_time = time.perf_counter()
+
+        total_latency = end_time - start_time
+        transcript = transcription.dict().get("text", "")
+
+        latency_info = {
+            "total_latency": total_latency,
+            "processing_time": None,
+            "network_latency": None,
+        }
+
+        return transcript, latency_info
     except Exception as e:
         raise e
 
 elevenlabs = ElevenLabs(api_key=ELEVENLABS_API_KEY)
 
-# stt_elevenlabs('audios/mp3/AudioBenchmark_1.mp3')
+# stt_elevenlabs('audios/mp3/AudioBenchmark_1.mp3', elevenlabs)
 
 #%% OPENAI Transcribe wrapper
 
-def stt_openai(audio_path:str, client:OpenAI) -> str:
+def stt_openai(audio_path: str, client: OpenAI):
     try:
+        start_time = time.perf_counter()
         with open(audio_path, "rb") as audio_file:
-
             transcription = client.audio.transcriptions.create(
-                model="gpt-4o-transcribe", 
-                file=audio_file
+                model="gpt-4o-transcribe",
+                file=audio_file,
             )
-        
-        return transcription.text
-    
+        end_time = time.perf_counter()
+
+        total_latency = end_time - start_time
+        transcript = transcription.text
+
+        latency_info = {
+            "total_latency": total_latency,
+            "processing_time": None,  # OpenAI doesn't return server-side timing
+            "network_latency": None,
+        }
+
+        return transcript, latency_info
     except Exception as e:
         raise e
 
@@ -163,19 +210,41 @@ results_deepgram_enhanced = []
 results_cartesia = []
 results_elevenlabs = []
 results_openai = []
+results_deepgram_nova_latency = []
+results_deepgram_enhanced_latency = []
+results_cartesia_latency = []
+results_elevenlabs_latency = []
+results_openai_latency = []
 
 for i,tr in enumerate(transcripts):
     try:
         print(i,tr)
         transcript.append(tr)
         
-        results_deepgram_nova.append(stt_deepgram(f'audios/mp3/AudioBenchmark_{i}.mp3', deepgram_client))
-        results_deepgram_enhanced.append(stt_deepgram(f'audios/mp3/AudioBenchmark_{i}.mp3', deepgram_client, model_str='enhanced'))
-        results_cartesia.append(stt_cartesia(f'audios/mp3/AudioBenchmark_{i}.mp3'))
-        results_elevenlabs.append(stt_elevenlabs(f'audios/mp3/AudioBenchmark_{i}.mp3'))
-        results_openai.append(stt_openai(f'audios/mp3/AudioBenchmark_{i}.mp3', openai_client))
+        deepgram_nova = stt_deepgram(f'audios/mp3/AudioBenchmark_{i}.mp3', deepgram_client)
+        results_deepgram_nova.append(deepgram_nova[0])
+        results_deepgram_nova_latency.append(deepgram_nova[1]['total_latency'])
+        
+        dg_enh = stt_deepgram(f'audios/mp3/AudioBenchmark_{i}.mp3', deepgram_client, model_str='enhanced')
+        results_deepgram_enhanced.append(dg_enh[0])
+        results_deepgram_enhanced_latency.append(dg_enh[1]['total_latency'])
+        
+        car = stt_cartesia(f'audios/mp3/AudioBenchmark_{i}.mp3')
+        results_cartesia.append(car[0])
+        results_cartesia_latency.append(car[1]['total_latency'])
+        
+        ellabs = stt_elevenlabs(f'audios/mp3/AudioBenchmark_{i}.mp3', elevenlabs)
+        results_elevenlabs.append(ellabs[0])
+        results_elevenlabs_latency.append(ellabs[1]['total_latency'])
+        
+        op_ai = stt_openai(f'audios/mp3/AudioBenchmark_{i}.mp3', openai_client)
+        results_openai.append(op_ai[0])
+        results_openai_latency.append(op_ai[1]['total_latency'])
+        
     except Exception as e:
         print(e)
+
+#%%
     
     
 results = pd.DataFrame({'Transcript':transcript, 
@@ -185,7 +254,16 @@ results = pd.DataFrame({'Transcript':transcript,
                         'ElevenLabs':results_elevenlabs,
                         'OpenAI_Transcribe':results_openai
                         })
+
+latency = pd.DataFrame({'Transcript':transcript, 
+                        'results_Deepgram_Nova-3':results_deepgram_nova_latency,
+                        'Deepgram_Enhanced':results_deepgram_enhanced_latency,
+                        'Cartesia':results_cartesia_latency,
+                        'ElevenLabs':results_elevenlabs_latency,
+                        'OpenAI_Transcribe':results_openai_latency
+                        })
 results.to_csv('Results.csv')
+latency.to_csv('Latency.csv')
 results.to_clipboard()
     
     
