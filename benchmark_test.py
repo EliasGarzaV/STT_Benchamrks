@@ -1,5 +1,5 @@
 #%%
-# from evaluate import load
+from evaluate import load
 from pydub import AudioSegment
 import os
 import json
@@ -45,8 +45,8 @@ def convert_opus_to_mp3(opus_file, mp3_file):
 
 def stt_deepgram(audio_path: str, client: DeepgramClient, model_str: str = "nova-3"):
     try:
-        start_time = time.perf_counter()
         with open(audio_path, "rb") as audio_file:
+            start_time = time.perf_counter()
             response = client.listen.v1.media.transcribe_file(
                 request=audio_file.read(),
                 model=model_str,
@@ -58,7 +58,7 @@ def stt_deepgram(audio_path: str, client: DeepgramClient, model_str: str = "nova
         total_latency = end_time - start_time
         response_json = json.loads(response.json())
         transcript = response_json["results"]["channels"][0]["alternatives"][0]["transcript"]
-
+        # print(response_json)
         processing_time = response_json.get("metadata", {}).get("processing_time")
         network_latency = total_latency - processing_time if processing_time else None
 
@@ -75,7 +75,7 @@ def stt_deepgram(audio_path: str, client: DeepgramClient, model_str: str = "nova
 deepgram_client = DeepgramClient(api_key=DEEPGRAMG_API_KEY)
 
 
-# stt_deepgram('audios/mp3/AudioBenchmark_1.mp3', deepgram_client)
+stt_deepgram('audios/mp3/AudioBenchmark_1.mp3', deepgram_client)
 
 #%% Cartesia API wrapper
 
@@ -117,13 +117,13 @@ def stt_cartesia(audio_path: str):
 
 #%%Elevenlabs API Wrapper
 
-def stt_elevenlabs(audio_path: str, client: ElevenLabs):
+def stt_elevenlabs(audio_path: str, client: ElevenLabs, model:str='scribe_v1'):
     try:
-        start_time = time.perf_counter()
         with open(audio_path, "rb") as audio_file:
+            start_time = time.perf_counter()
             transcription = client.speech_to_text.convert(
                 file=audio_file,
-                model_id="scribe_v1",
+                model_id=model,
                 tag_audio_events=True,
                 language_code="spa",
                 diarize=False,
@@ -132,6 +132,7 @@ def stt_elevenlabs(audio_path: str, client: ElevenLabs):
 
         total_latency = end_time - start_time
         transcript = transcription.dict().get("text", "")
+        # print(transcription)
 
         latency_info = {
             "total_latency": total_latency,
@@ -145,7 +146,7 @@ def stt_elevenlabs(audio_path: str, client: ElevenLabs):
 
 elevenlabs = ElevenLabs(api_key=ELEVENLABS_API_KEY)
 
-# stt_elevenlabs('audios/mp3/AudioBenchmark_1.mp3', elevenlabs)
+# stt_elevenlabs('audios/mp3/AudioBenchmark_1.mp3', elevenlabs, model='scribe_v1_experimental')
 
 #%% OPENAI Transcribe wrapper
 
@@ -179,6 +180,7 @@ openai_client = OpenAI(api_key=OPENAI_API_KEY)
 #%% WER definition
 
 def get_wer(predictions, real, wer_model=load("wer"), evaluate_punctuation:bool=True, evaluate_accent:bool=False, remove=".,?!¿¡;:*(){}[]'"):
+
     #All to lower case
     predictions = [p.lower() for p in predictions]
     real = [p.lower() for p in real]
@@ -205,102 +207,102 @@ loaded_wer = load('wer')
 
 #%% Run Benchmark
 transcript = []
-results_deepgram_nova = []
-results_deepgram_enhanced = []
-results_cartesia = []
-results_elevenlabs = []
-results_openai = []
-results_deepgram_nova_latency = []
-results_deepgram_enhanced_latency = []
-results_cartesia_latency = []
-results_elevenlabs_latency = []
-results_openai_latency = []
+models = ['Deepgram_Nova-3', 'Deepgram_Enhanced', 'Cartesia', 'ElevenLabs', 'ElevenLabs_Experimental', 'OpenAI_Transcribe']
+results = {m:[] for m in models}
+latency = {m:[] for m in models}
 
 for i,tr in enumerate(transcripts):
     try:
         print(i,tr)
         transcript.append(tr)
         
-        deepgram_nova = stt_deepgram(f'audios/mp3/AudioBenchmark_{i}.mp3', deepgram_client)
-        results_deepgram_nova.append(deepgram_nova[0])
-        results_deepgram_nova_latency.append(deepgram_nova[1]['total_latency'])
-        
-        dg_enh = stt_deepgram(f'audios/mp3/AudioBenchmark_{i}.mp3', deepgram_client, model_str='enhanced')
-        results_deepgram_enhanced.append(dg_enh[0])
-        results_deepgram_enhanced_latency.append(dg_enh[1]['total_latency'])
-        
-        car = stt_cartesia(f'audios/mp3/AudioBenchmark_{i}.mp3')
-        results_cartesia.append(car[0])
-        results_cartesia_latency.append(car[1]['total_latency'])
-        
-        ellabs = stt_elevenlabs(f'audios/mp3/AudioBenchmark_{i}.mp3', elevenlabs)
-        results_elevenlabs.append(ellabs[0])
-        results_elevenlabs_latency.append(ellabs[1]['total_latency'])
-        
-        op_ai = stt_openai(f'audios/mp3/AudioBenchmark_{i}.mp3', openai_client)
-        results_openai.append(op_ai[0])
-        results_openai_latency.append(op_ai[1]['total_latency'])
+        for m in models:
+            if(m == 'Deepgram_Nova-3'):
+                res = stt_deepgram(f'audios/mp3/AudioBenchmark_{i}.mp3', deepgram_client)
+            elif(m == 'Deepgram_Enhanced'):
+                res = stt_deepgram(f'audios/mp3/AudioBenchmark_{i}.mp3', deepgram_client, model_str='enhanced')
+            elif(m == 'Cartesia'):
+                res = stt_cartesia(f'audios/mp3/AudioBenchmark_{i}.mp3')
+            elif(m == 'ElevenLabs'):
+                res = stt_elevenlabs(f'audios/mp3/AudioBenchmark_{i}.mp3', elevenlabs, model='scribe_v1')
+            elif(m == 'ElevenLabs_Experimental'):
+                res = stt_elevenlabs(f'audios/mp3/AudioBenchmark_{i}.mp3', elevenlabs, model='scribe_v1_experimental')
+            elif(m == 'OpenAI_Transcribe'):
+                res = stt_openai(f'audios/mp3/AudioBenchmark_{i}.mp3', openai_client)
+                
+            results[m].append(res[0])
+            latency[m].append(res[1]['total_latency'])
         
     except Exception as e:
         print(e)
+        transcript = transcript[:-1]
 
 #%%
-    
-    
-results = pd.DataFrame({'Transcript':transcript, 
-                        'results_Deepgram_Nova-3':results_deepgram_nova,
-                        'Deepgram_Enhanced':results_deepgram_enhanced,
-                        'Cartesia':results_cartesia,
-                        'ElevenLabs':results_elevenlabs,
-                        'OpenAI_Transcribe':results_openai
-                        })
 
-latency = pd.DataFrame({'Transcript':transcript, 
-                        'results_Deepgram_Nova-3':results_deepgram_nova_latency,
-                        'Deepgram_Enhanced':results_deepgram_enhanced_latency,
-                        'Cartesia':results_cartesia_latency,
-                        'ElevenLabs':results_elevenlabs_latency,
-                        'OpenAI_Transcribe':results_openai_latency
-                        })
+results['Transcript'] = transcript
+latency['Transcript'] = transcript
+    
+results = pd.DataFrame(results)
+
+latency = pd.DataFrame(latency)
 results.to_csv('Results.csv')
 latency.to_csv('Latency.csv')
 results.to_clipboard()
     
     
 #%%
-    
-nova = get_wer(results_deepgram_nova, transcript, evaluate_punctuation=False, remove=['¿¡'])
-enhanced = get_wer(results_deepgram_enhanced, transcript, evaluate_punctuation=False, remove=['¿¡'])
-cartesia = get_wer(results_cartesia, transcript, evaluate_punctuation=False, remove=['¿¡'])
-elevenlabs = get_wer(results_elevenlabs, transcript, evaluate_punctuation=False, remove=['¿¡'])
-openai = get_wer(results_openai, transcript, evaluate_punctuation=False, remove=['¿¡'])
-
-nova, enhanced, cartesia, elevenlabs
+for m in models:
+    results[f'WER_{m}'] = results.apply(lambda row: get_wer([row[m]], [row['Transcript']]), axis=1)
+WER = results[['Transcript'] + [f'WER_{m}' for m in models]]
+WER.describe()
 #%%
-    
-nova = get_wer(results_deepgram_nova, transcript)
-enhanced = get_wer(results_deepgram_enhanced, transcript)
-cartesia = get_wer(results_cartesia, transcript)
-elevenlabs = get_wer(results_elevenlabs, transcript)
-openai = get_wer(results_openai, transcript)
-
-
-nova, enhanced, cartesia, elevenlabs
+for m in models:
+    results[f'WER_NoCommas_{m}'] = results.apply(lambda row: get_wer([row[m]], [row['Transcript']], evaluate_punctuation=False, remove=","), axis=1)
+WER_NoCommas = results[['Transcript'] + [f'WER_NoCommas_{m}' for m in models]]
+WER_NoCommas.describe()
 #%%
-    
-nova = get_wer(results_deepgram_nova, transcript, evaluate_punctuation=False)
-enhanced = get_wer(results_deepgram_enhanced, transcript, evaluate_punctuation=False)
-cartesia = get_wer(results_cartesia, transcript, evaluate_punctuation=False)
-elevenlabs = get_wer(results_elevenlabs, transcript, evaluate_punctuation=False)
-openai = get_wer(results_openai, transcript, evaluate_punctuation=False)
+for m in models:
+    results[f'WER_NoPunct_{m}'] = results.apply(lambda row: get_wer([row[m]], [row['Transcript']], evaluate_punctuation=False, remove=".,¿?¡!"), axis=1)
+WER_NoPunct = results[['Transcript'] + [f'WER_NoPunct_{m}' for m in models]]
+WER_NoPunct.describe()
 
-nova, enhanced, cartesia, elevenlabs
+
+
+#%%
+latency.describe()
 
 #%%
 
+dfs = {
+    "Results": results,
+    "WER": WER,
+    "WER_NoCommas": WER_NoCommas,
+    "WER_NoPunctuation": WER_NoPunct,
+    'Latency':latency
+}
 
+with pd.ExcelWriter("Summary_2.xlsx", engine="openpyxl") as writer:
+    # Write each original dataframe to its sheet
+    for name, df in dfs.items():
+        df.to_excel(writer, sheet_name=name, index=False)
 
+    # Prepare to write describes in one sheet sequentially
+    startrow = 0
+    for name, df in dfs.items():
+        desc = df.describe()
 
+        # Write a title before each describe
+        pd.DataFrame([["Describe of " + name]]).to_excel(
+            writer, sheet_name="Summary", startrow=startrow, header=False, index=False
+        )
+        startrow += 2  # leave one blank row
 
+        # Write the describe
+        desc.to_excel(
+            writer, sheet_name="Summary", startrow=startrow
+        )
+        startrow += len(desc) + 3  # move down for next section
+
+#%%
 
 
