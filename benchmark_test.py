@@ -16,6 +16,7 @@ load_dotenv()
 DEEPGRAMG_API_KEY = os.getenv("DEEPGRAM_API_KEY")
 CARTESIA_API_KEY = os.getenv("CARTESIA_KEY")
 ELEVENLABS_API_KEY = os.getenv('ELEVENLABS_API_KEY')
+ELEVENLABS_API_KEY_ENTREPRISE = os.getenv('ELEVENLABS_API_KEY_ENTREPRISE')
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 
@@ -145,6 +146,7 @@ def stt_elevenlabs(audio_path: str, client: ElevenLabs, model:str='scribe_v1'):
         raise e
 
 elevenlabs = ElevenLabs(api_key=ELEVENLABS_API_KEY)
+elevenlabs_entreprise = ElevenLabs(api_key=ELEVENLABS_API_KEY_ENTREPRISE)
 
 # stt_elevenlabs('audios/mp3/AudioBenchmark_1.mp3', elevenlabs, model='scribe_v1_experimental')
 
@@ -207,7 +209,8 @@ loaded_wer = load('wer')
 
 #%% Run Benchmark
 transcript = []
-models = ['Deepgram_Nova-3', 'Deepgram_Enhanced', 'Cartesia', 'ElevenLabs', 'ElevenLabs_Experimental', 'OpenAI_Transcribe']
+models = ['Deepgram_Nova-3', 'Deepgram_Enhanced', 'Cartesia', 'ElevenLabs', 'ElevenLabs_Entreprise', 
+          'ElevenLabs_Entreprise_Experimental', 'OpenAI_Transcribe']
 results = {m:[] for m in models}
 latency = {m:[] for m in models}
 
@@ -225,8 +228,10 @@ for i,tr in enumerate(transcripts):
                 res = stt_cartesia(f'audios/mp3/AudioBenchmark_{i}.mp3')
             elif(m == 'ElevenLabs'):
                 res = stt_elevenlabs(f'audios/mp3/AudioBenchmark_{i}.mp3', elevenlabs, model='scribe_v1')
-            elif(m == 'ElevenLabs_Experimental'):
-                res = stt_elevenlabs(f'audios/mp3/AudioBenchmark_{i}.mp3', elevenlabs, model='scribe_v1_experimental')
+            elif(m == 'ElevenLabs_Entreprise'):
+                res = stt_elevenlabs(f'audios/mp3/AudioBenchmark_{i}.mp3', elevenlabs_entreprise, model='scribe_v1')
+            elif(m == 'ElevenLabs_Entreprise_Experimental'):
+                res = stt_elevenlabs(f'audios/mp3/AudioBenchmark_{i}.mp3', elevenlabs_entreprise, model='scribe_v1_experimental')
             elif(m == 'OpenAI_Transcribe'):
                 res = stt_openai(f'audios/mp3/AudioBenchmark_{i}.mp3', openai_client)
                 
